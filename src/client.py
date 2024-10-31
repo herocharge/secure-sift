@@ -1,24 +1,17 @@
 import socket
-from comm import send_bytes, receive_bytes
+from comm import Comm
 import tenseal as ts
 
 
 def start_client():
-    host = '127.0.0.1'
-    port = 12345
-
-    # Create socket object
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    # Connect to server
-    client_socket.connect((host, port))
-    print(f"Connected to {host}:{port}")
+    comm = Comm()
+    comm.start_client()
 
     ## Encryption Parameters
 
     # controls precision of the fractional part
     bits_scale = 26
-
+    
     # Create TenSEAL context
     context = ts.context(
         ts.SCHEME_TYPE.CKKS,
@@ -45,19 +38,25 @@ def start_client():
     # context_size = (len(con_ser))
     # print(context_size)
     # client_socket.sendall(struct.pack("!I", context_size) + con_ser)
-    send_bytes(client_socket, context.serialize())
-    send_bytes(client_socket, encrypted_data.serialize())
+    comm.call_api(b'init_context', context.serialize())
+    # comm.send_bytes(context.serialize())
+    
+    comm.call_api(b'double_vec', encrypted_data.serialize())
+    # comm.send_bytes(encrypted_data.serialize())
     # client_socket.send(encrypted_data.serialize())
 
     # Receive encrypted data and context from server
-    response = receive_bytes(client_socket)
+    response = comm.receive_bytes()
     result = ts.ckks_vector_from(context, response)
 
     # Decrypt received data
     decrypted_data = result.decrypt(secret_key)
     print("Decrypted data:", decrypted_data)
 
-    client_socket.close()
+    comm.call_api(b'exit')
+
+
+    comm.client_socket.close() # TODO: push this to destructor
 
 if __name__ == "__main__":
     start_client()
