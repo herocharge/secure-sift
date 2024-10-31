@@ -40,7 +40,7 @@ def secCompare(a, b):
     
     raise NotImplementedError("Not implemented")
 
-def sec2DVetorProduct(a, b):
+def sec2DVectorProduct(a, b):
     if DEBUG:
         for i in range(len(a)):
             for j in range(len(a[0])):
@@ -50,9 +50,33 @@ def sec2DVetorProduct(a, b):
     
     raise NotImplementedError("Not implemented")
 
-def secClip(a, min_val, max_val):
+def sec2DVectorSum(a):
     if DEBUG:
-        if secCompare(a, min_val):
+        ret = 0
+        for i in range(a.shape[0]):
+            for j in range(a.shape[1]):
+                ret = secAdd(ret, a[i, j])
+        return ret
+    
+    raise NotImplementedError("Not implemented")
+
+
+def sec2DVectorProduct(a, b):
+    if DEBUG:
+        product = np.zeros_like(a, dtype=np.float64)
+        for i in range(a.shape[0]):
+            for j in range(a.shape[1]):
+                product[i, j] = secMul(a[i, j], b[i, j])
+        return product
+    
+    raise NotImplementedError("Not implemented")
+
+def secClip(a, min_val, max_val):
+    """
+        a is a scalar
+    """
+    if DEBUG:
+        if not secCompare(a, min_val):
             return min_val
         if secCompare(a, max_val):
             return max_val
@@ -70,34 +94,52 @@ def secClip2DVetor(a, min_val, max_val):
     
     raise NotImplementedError("Not implemented")
 
+def secClip3DVetor(a, min_val, max_val):
+    if DEBUG:
+        shape = a.shape
+        for i in range(shape[0]):
+            for j in range(shape[1]):
+                for k in range(shape[2]):
+                    # a[i, j, k] = a[i, j, k]
+                    a[i, j, k] = secClip(a[i, j, k], min_val, max_val)
+
+        return a
+    
+    raise NotImplementedError("Not implemented")
+
 def secConvolve2d(image, kernel, isKernelEncrypted=True):
     """
-        image and kernel are 2D numpy arrays
+        Perform a 2D convolution on an encrypted image using an encrypted kernel.
+        image and kernel are 2D numpy arrays.
     """
-    if isKernelEncrypted == False:
-        raise NotImplementedError("Kernel must be encrypted")
     if DEBUG:
+        if not isKernelEncrypted:
+            raise NotImplementedError("Kernel must be encrypted")
+        
         img_height, img_width, num_channels = image.shape
         kernel_height, kernel_width = kernel.shape
         pad_height = kernel_height // 2
         pad_width = kernel_width // 2
         
+        # Padding the image to handle border effects
         img_padded = np.pad(image, ((pad_height, pad_height), (pad_width, pad_width), (0, 0)), mode='constant')
-        img_out = np.zeros((img_height, img_width, num_channels))
+        img_out = np.zeros((img_height, img_width, num_channels), dtype=np.float64)
         
+        # Convolve each channel separately
         for c in range(num_channels):
             for i in range(img_height):
                 for j in range(img_width):
-                    patch = img_padded[i:i+kernel_height, j:j+kernel_width, c]
-                    resulting_patch = sec2DVetorProduct(patch, kernel)
-                    for x in range(kernel_height):
-                        for y in range(kernel_width):
-                            img_out[i+x, j+y, c] = resulting_patch[x, y]
+                    # Extract the patch
+                    patch = img_padded[i:i + kernel_height, j:j + kernel_width, c]
 
-        img_out = secClip2DVetor(img_out, 0, 255)
-        img_out = img_out.astype(np.uint8) 
+                    # Perform secure 2D vector product and sum
+                    vector_prod = sec2DVectorProduct(patch, kernel)
+                    img_out[i, j, c] = sec2DVectorSum(vector_prod)
+                    # img_out[i, j, c] = (patch * kernel).sum()
 
-        return img_out
+        # Clip values to the 0-255 range and convert to uint8
+        img_out = secClip3DVetor(img_out, 0, 255)
+        return img_out.astype(np.uint8)
 
     raise NotImplementedError("Not implemented")
 
@@ -106,6 +148,8 @@ def secResize(image, dsize, fx=None, fy=None, interpolation=None):
         if fx is None and fy is None:
             fx = dsize[0] / image.shape[1]
             fy = dsize[1] / image.shape[0]
+
+        print("Image shape: ", image.shape)
         
         new_image = np.zeros((dsize[1], dsize[0], image.shape[2]), dtype=np.uint8)
         for y in range(dsize[1]):
@@ -125,7 +169,10 @@ def secGaussianBlur(image, kernel_size, sigma):
                 kernel[i, j] = np.exp(-((i - center) ** 2 + (j - center) ** 2) / (2 * sigma ** 2))
         kernel /= kernel.sum()
 
+        # kernel = np.ones((kernel_size, kernel_size))
+
         new_image = secConvolve2d(image, kernel)
+        # new_image = image
         return new_image
 
     raise NotImplementedError("Not implemented")

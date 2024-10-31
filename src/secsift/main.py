@@ -2,7 +2,7 @@ import cv2
 
 from secPysift import *
 
-img1 = cv2.imread('box.png', 0)       
+img1 = cv2.imread('box.png')  
 
 base_image = secGenerateBaseImage(img1, 1.6, 0.5)
 num_octaves = secComputeNumberOfOctaves(base_image.shape)
