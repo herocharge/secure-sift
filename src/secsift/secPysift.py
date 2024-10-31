@@ -6,9 +6,8 @@ def secGenerateBaseImage(image, sigma, assumed_blur, kernel_size=3):
         Only image is encrypted
     """
     if DEBUG:
-        # image = secResize(image, (100, 100))
+        image = secResize(image, (100, 100))
         sigma_diff = sqrt(max((sigma ** 2) - ((2 * assumed_blur) ** 2), 0.01))
-        # return image
         return secGaussianBlur(image, kernel_size=kernel_size, sigma=sigma_diff)
     
     raise NotImplementedError("Not implemented")
@@ -68,7 +67,7 @@ def secGenerateDoGImages(gaussian_images):
         for gaussian_images_in_octave in gaussian_images:
             dog_images_in_octave = []
             for first_image, second_image in zip(gaussian_images_in_octave, gaussian_images_in_octave[1:]):
-                dog_images_in_octave.append(secSubtract2DVector(second_image, first_image))  # ordinary subtraction will not work because the images are unsigned integers
+                dog_images_in_octave.append(secSubtract3DVector(second_image, first_image))  # ordinary subtraction will not work because the images are unsigned integers
             dog_images.append(dog_images_in_octave)
         return dog_images
     
