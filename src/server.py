@@ -1,5 +1,6 @@
 import socket
-import pickle
+from comm import send_bytes, receive_bytes
+import tenseal as ts
 
 def start_server():
     host = '127.0.0.1'
@@ -17,19 +18,32 @@ def start_server():
 
     while True:
         client_socket, address = server_socket.accept()
+        buf_size = client_socket.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
+        print(buf_size)
         print(f"Connected to {address}")
 
-        # Receive encrypted data and context from client
-        data = client_socket.recv(4096)
-        encrypted_data, context = pickle.loads(data)
+
+        data = receive_bytes(client_socket)
+        print(data[:10], data[-10:])
+
+        context = ts.context_from(data)
+
+
+        data = receive_bytes(client_socket)
+        enc = ts.ckks_vector_from(context, data)
+
+        enc = enc.add(enc)
+
+
+
+
 
         # Process encrypted data (e.g., perform computations)
         # For simplicity, just return the same encrypted data
 
         # Send encrypted data and context back to client
-        response = pickle.dumps((encrypted_data, context))
-        client_socket.send(response)
-
+        # response = pickle.dumps()
+        send_bytes(client_socket, enc.serialize())
         client_socket.close()
 
 if __name__ == "__main__":
