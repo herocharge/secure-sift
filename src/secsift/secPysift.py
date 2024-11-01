@@ -1,12 +1,13 @@
-from primitives import *
+from secsift.primitives import *
 from numpy import sqrt, log
-
+# DEBUG=1
 def secGenerateBaseImage(image, sigma, assumed_blur, kernel_size=3):
     """
         Only image is encrypted
     """
     if DEBUG:
         image = secResize(image, (100, 100))
+        print("Resize done")
         sigma_diff = sqrt(max((sigma ** 2) - ((2 * assumed_blur) ** 2), 0.01))
         return secGaussianBlur(image, kernel_size=kernel_size, sigma=sigma_diff)
     

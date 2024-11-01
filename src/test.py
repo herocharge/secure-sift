@@ -1,4 +1,5 @@
 import tenseal as ts
+import numpy as np
 from time import time
 
 
@@ -25,6 +26,8 @@ context.make_context_public()
 
 enc_vec = (ts.ckks_vector(context=context, vector=[0.1, 0.2, 0.3]))
 enc_vec2 = (ts.ckks_vector(context=context, vector=[0.1, 0.2, 0.3]))
+
+print(np.array([enc_vec, enc_vec2]))
 
 enc_vec.add(enc_vec2)
 

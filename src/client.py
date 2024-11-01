@@ -1,12 +1,9 @@
 import socket
 from comm import Comm
 import tenseal as ts
+import cv2
 
-
-def start_client():
-    comm = Comm()
-    comm.start_client()
-
+def init_enc():
     ## Encryption Parameters
 
     # controls precision of the fractional part
@@ -27,31 +24,52 @@ def start_client():
 
     secret_key = context.secret_key()
     context.make_context_public()
+    return context, secret_key
 
-    encrypted_data = ts.ckks_vector(context, [0.1, 0.2, 0.3])
+def encrypt_image(context, img):
+    enc_img = []
+    for row in range(img.shape[0]):
+        enc_row = []
+        for col in range(img.shape[1]):
+            enc_row.append(ts.ckks_vector(context, img[row][col]))
+        enc_img.append(enc_row)
+    return enc_img
 
-    # Send encrypted data and context to server
-    # message = pickle.dumps((encrypted_data.serialize(), context.serialize()))
-    con_ser = context.serialize()
+def load_image(context, img):
+    enc_img = []
+    for row in range(len(img)):
+        enc_row = []
+        for col in range(len(img[0])):
+            enc_row.append(ts.ckks_vector_from(context, img[row][col]))
+        enc_img.append(enc_row)
+    return enc_img
 
-    print(con_ser[:10], con_ser[-10:])
-    # context_size = (len(con_ser))
-    # print(context_size)
-    # client_socket.sendall(struct.pack("!I", context_size) + con_ser)
+
+def main():
+    comm = Comm()
+    comm.start_client()
+    context, secret_key = init_enc()
+
+    img = cv2.imread('../assets/fly-20x20.jpg')
+    for row in img:
+        for col in img:
+            print(col)
+
     comm.call_api(b'init_context', context.serialize())
-    # comm.send_bytes(context.serialize())
+
+    enc_img = encrypt_image(context, img)
+
+    comm.call_api(b'generate_base_image')
+
+    print("Sending image...")
+    comm.send_img(enc_img)
+    print("Image sent...")
+
+    res_img = load_image(context, comm.recv_img())
     
-    comm.call_api(b'double_vec', encrypted_data.serialize())
-    # comm.send_bytes(encrypted_data.serialize())
-    # client_socket.send(encrypted_data.serialize())
-
-    # Receive encrypted data and context from server
-    response = comm.receive_bytes()
-    result = ts.ckks_vector_from(context, response)
-
-    # Decrypt received data
-    decrypted_data = result.decrypt(secret_key)
-    print("Decrypted data:", decrypted_data)
+    for row in res_img:
+        for col in row:
+            print(col.decrypt(secret_key))
 
     comm.call_api(b'exit')
 
@@ -59,4 +77,4 @@ def start_client():
     comm.client_socket.close() # TODO: push this to destructor
 
 if __name__ == "__main__":
-    start_client()
+    main()

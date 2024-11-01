@@ -1,4 +1,5 @@
 import numpy as np
+import tenseal as ts
 
 DEBUG = 1
 
@@ -57,7 +58,7 @@ def sec2DVectorSum(a):
 
 def sec2DVectorProduct(a, b):
     if DEBUG:
-        product = np.zeros_like(a, dtype=np.float64)
+        product = np.zeros_like(a, dtype=ts.CKKSVector)
         for i in range(a.shape[0]):
             for j in range(a.shape[1]):
                 product[i, j] = secMul(a[i, j], b[i, j])
@@ -115,7 +116,7 @@ def secConvolve2d(image, kernel, isKernelEncrypted=True):
         pad_width = kernel_width // 2
         
         img_padded = np.pad(image, ((pad_height, pad_height), (pad_width, pad_width), (0, 0)), mode='constant')
-        img_out = np.zeros((img_height, img_width, num_channels), dtype=np.float64)
+        img_out = np.zeros((img_height, img_width, num_channels), dtype=ts.CKKSVector)
 
         for c in range(num_channels):
             for i in range(img_height):
@@ -138,7 +139,7 @@ def secResize(image, dsize, fx=None, fy=None, interpolation=None):
 
         print("Image shape: ", image.shape)
         
-        new_image = np.zeros((dsize[1], dsize[0], image.shape[2]), dtype=np.uint8)
+        new_image = np.zeros((dsize[1], dsize[0], 1), dtype=ts.CKKSVector)
         for y in range(dsize[1]):
             for x in range(dsize[0]):
                 new_image[y, x] = image[int(y / fy), int(x / fx)]

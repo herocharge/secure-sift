@@ -73,7 +73,7 @@ class Comm:
         # Receive data length (4-byte integer)
         length_buffer = self.client_socket.recv(4)
         length = int.from_bytes(length_buffer, byteorder="big")
-        print(length)
+        # print(length)
         # Receive data in chunks
         data = b""
         while len(data) < length:
@@ -81,3 +81,21 @@ class Comm:
             data += chunk
         
         return data
+
+    def send_img(self, img):
+        self.send_bytes(bytes(str(len(img)), encoding='ascii'))
+        self.send_bytes(bytes(str(len(img[0])), encoding='ascii'))
+        for row in img:
+            for col in row:
+                self.send_bytes(col.serialize())
+                
+    def recv_img(self):
+        n_rows = int(self.receive_bytes().decode())
+        n_cols = int(self.receive_bytes().decode())
+        img = []
+        for row in range(n_rows):
+            recv_row = []
+            for _ in range(n_cols):
+                recv_row.append(self.receive_bytes())
+            img.append(recv_row)
+        return img
