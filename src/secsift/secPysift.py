@@ -1,4 +1,5 @@
 from primitives import *
+from primitives import *
 from numpy import sqrt, log
 from tqdm import tqdm
 
@@ -87,6 +88,7 @@ def secGenerateDoGImages(gaussian_images):
         for gaussian_images_in_octave in gaussian_images:
             dog_images_in_octave = []
             for first_image, second_image in zip(gaussian_images_in_octave, gaussian_images_in_octave[1:]):
+                dog_images_in_octave.append(secSubtract2DVector(second_image, first_image))  # ordinary subtraction will not work because the images are unsigned integers
                 dog_images_in_octave.append(secSubtract2DVector(second_image, first_image))  # ordinary subtraction will not work because the images are unsigned integers
             dog_images.append(dog_images_in_octave)
         return dog_images

@@ -4,6 +4,12 @@ import cv2
 
 DEBUG = 0
 
+def secENC(val, params = None):
+    if DEBUG:
+        return val
+    
+    raise NotImplementedError("Not implemented")
+
 def secAdd(a, b):
     if DEBUG:
         return a + b
@@ -13,7 +19,8 @@ def secAdd(a, b):
 
 def secSub(a, b):
     if DEBUG:
-        return a - b
+        b = secMul(b, -1)
+        return secAdd(a, b)
     
     return -b + a # Someties a - b is much slower than -b + a
 
@@ -36,7 +43,7 @@ def secCompare(a, b):
     
     raise NotImplementedError("Not implemented")
 
-def sec2DVectorProduct(a, b):
+def secLTSQ(a, b, rcond=None):
     if DEBUG:
         for i in range(len(a)):
             for j in range(len(a[0])):
