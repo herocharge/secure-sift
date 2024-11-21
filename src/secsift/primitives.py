@@ -123,7 +123,8 @@ def secConvolve2d(image, kernel, isKernelEncrypted=True):
         pad_height = kernel_height // 2
         pad_width = kernel_width // 2
         
-        img_padded = np.pad(image, ((pad_height, pad_height), (pad_width, pad_width), (0, 0)), mode='constant')
+        # pad ones to the image
+        img_padded = np.pad(image, ((pad_height, pad_height), (pad_width, pad_width), (0, 0)), mode='constant', constant_values=1)
         img_out = np.zeros((img_height, img_width, num_channels))
 
         for c in range(num_channels):
@@ -144,7 +145,7 @@ def secConvolve2d(image, kernel, isKernelEncrypted=True):
     pad_height = kernel_height // 2
     pad_width = kernel_width // 2
     
-    img_padded = np.pad(image, ((pad_height, pad_height), (pad_width, pad_width)), mode='constant')
+    img_padded = np.pad(image, ((pad_height, pad_height), (pad_width, pad_width)), mode='constant', constant_values=1)
     img_out = np.zeros((img_height, img_width), dtype=ts.CKKSVector)
 
     for i in range(img_height):

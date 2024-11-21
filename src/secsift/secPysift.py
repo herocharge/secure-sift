@@ -102,12 +102,14 @@ def secGenerateDoGImages(gaussian_images):
         dog_images.append(dog_images_in_octave)
     return dog_images
 
-def secFindScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, image_border_width, contrast_threshold=0.04, cmp=None):
-    """Find pixel positions of all scale-space extrema in the image pyramid
+def secFindScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, image_border_width, contrast_threshold=0.04, cmp=None, refresh = lambda x: x):
+    """
+        Only gaussian_images, dog_images are encrypted
     """
 
     threshold = np.floor(0.5 * contrast_threshold / num_intervals * 255)  # from OpenCV implementation
     keypoints = []
+    flat_list = []
 
     for octave_index, dog_images_in_octave in enumerate(dog_images):
         octave_keypoints = []
@@ -118,25 +120,27 @@ def secFindScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, 
                 row_keypoints = []
                 for j in range(image_border_width, first_image.shape[1] - image_border_width):
                     # if isPixelAnExtremum(first_image[i-1:i+2, j-1:j+2], second_image[i-1:i+2, j-1:j+2], third_image[i-1:i+2, j-1:j+2], threshold):
-                    keypoint = localizeExtremumViaQuadraticFit(i, j, image_index + 1, octave_index, num_intervals, dog_images_in_octave, sigma, contrast_threshold, image_border_width, cmp=cmp)
+                    keypoint = localizeExtremumViaQuadraticFit(i, j, image_index + 1, octave_index, num_intervals, dog_images_in_octave, sigma, contrast_threshold, image_border_width, cmp=cmp, refresh = refresh)
                     
                     # keypoints_with_orientations = computeKeypointsWithOrientations(keypoint, octave_index, gaussian_images[octave_index][localized_image_index])
                     keypoints_with_orientations = [keypoint]*36
+                    flat_list.append(keypoints_with_orientations)
                     row_keypoints.append(keypoints_with_orientations)
                 img_keypoints.append(row_keypoints)
             octave_keypoints.append(img_keypoints)
         keypoints.append(octave_keypoints)
                     # keypoints.append(keypoint_with_orientation)
-    return keypoints
+    return keypoints, flat_list
 
 class EncKeyPoint:
-    def __init__(self, is_keypoint_present, size, response, angle=None):
+    def __init__(self, i, j, is_keypoint_present, size, response, angle=None):
+        self.i = i
+        self.j = j
         self.is_keypoint_present = is_keypoint_present
         self.size = size
         self.response = response
         self.angle = angle
     
-
 
 def isPixelAnExtremum(first_subimage, second_subimage, third_subimage, threshold):
     """
@@ -178,7 +182,7 @@ def isPixelAnExtremum(first_subimage, second_subimage, third_subimage, threshold
     #                secComparePixel(center_pixel_value , second_subimage[1, 2])
     return False
 
-def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_intervals, dog_images_in_octave, sigma, contrast_threshold, image_border_width, eigenvalue_ratio=10, num_attempts_until_convergence=1, cmp = None):
+def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_intervals, dog_images_in_octave, sigma, contrast_threshold, image_border_width, eigenvalue_ratio=10, num_attempts_until_convergence=1, cmp = None, refresh = lambda x: x):
     """Iteratively refine pixel positions of scale-space extrema via quadratic fit around each extremum's neighbors
     """
     print("Num attempts: ", num_attempts_until_convergence)
@@ -194,14 +198,17 @@ def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_interva
     hessian = computeHessianAtCenterPixel(pixel_cube)
     ltsq_val, denominator = secLTSQ(hessian, gradient)
     # ltsq_val = ltsq_val[0]
-    extremum_update = secMul(-1, ltsq_val)
+    extremum_update = -ltsq_val
+    extremum_update = refresh(extremum_update)
+
     # cmp = lambda x, a, b: a < x < b
     # condition1 =  abs(extremum_update[0]) < 0.5 * denominator and abs(extremum_update[1]) < 0.5 * denominator and abs(extremum_update[2]) < 0.5 * denominator
     condition1 = (cmp(extremum_update[0], -0.5 * denominator, 0.5 * denominator) 
                     * cmp(extremum_update[1], -0.5 * denominator, 0.5 * denominator) 
                     * cmp(extremum_update[2], -0.5 * denominator, 0.5 * denominator))
     functionValueAtUpdatedExtremum = pixel_cube[1, 1, 1] * denominator + 0.5 * np.dot(gradient, extremum_update)
-    
+    functionValueAtUpdatedExtremum = refresh(functionValueAtUpdatedExtremum)
+
     # condition2 = abs(functionValueAtUpdatedExtremum) * num_intervals >= contrast_threshold * denominator
     condition2 = -cmp(functionValueAtUpdatedExtremum * num_intervals, -contrast_threshold * denominator, -contrast_threshold * denominator) + 1
     
@@ -213,6 +220,8 @@ def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_interva
     # Contrast check passed -- construct and return OpenCV KeyPoint object
     # Ignoring extram_update[2] in size, because it will be of the order 1 - 1.2 which is negligible
     keypoint = EncKeyPoint(
+        i = i,
+        j = j,
         is_keypoint_present = condition1 * condition2 * condition3,
         size = sigma * (2 ** ((image_index) / (num_intervals))) * (2 ** (octave_index + 1)),
         # response= secAbs(functionValueAtUpdatedExtremum) # check if needed later
@@ -271,7 +280,10 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
     weight_factor = -0.5 / (scale ** 2)
     raw_histogram = np.zeros(num_bins)
     smooth_histogram = np.zeros(num_bins)
-
+    tan_right_bins = np.zeros(num_bins // 4) # when angle is -45 to 45 and the (135 to -135, anticlockwise), abs(dx) > abs(dy)
+    tan_left_bins = np.zeros(num_bins // 4) # when angle is -45 to 45 and the (135 to -135, anticlockwise), abs(dx) > abs(dy)
+    cot_up_bins = np.zeros(num_bins // 4) # otherwise, abs(dx) < abs(dy)
+    cot_down_bins = np.zeros(num_bins // 4) # otherwise, abs(dx) < abs(dy)
     for i in range(-radius, radius + 1):
         region_y = int(round(keypoint.pt[1] / np.float32(2 ** octave_index))) + i
         if region_y > 0 and region_y < image_shape[0] - 1:
@@ -281,13 +293,40 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
                     dx = gaussian_image[region_y, region_x + 1] - gaussian_image[region_y, region_x - 1]
                     dy = gaussian_image[region_y - 1, region_x] - gaussian_image[region_y + 1, region_x]
                     gradient_magnitude = sqrt(dx * dx + dy * dy)
-                    gradient_orientation = np.rad2deg(np.arctan2(dy, dx))
+                    # gradient_orientation = np.rad2deg(np.arctan2(dy, dx))
                     weight = np.exp(weight_factor * (i ** 2 + j ** 2))  # constant in front of exponential can be dropped because we will find peaks later
-                    histogram_index = int(round(gradient_orientation * num_bins / 360.))
-                    raw_histogram[histogram_index % num_bins] += weight * gradient_magnitude
+                    # histogram_index = int(round(gradient_orientation * num_bins / 360.))
+                    is_tan = cmp(dy, -dx, dx)
+                    is_cot = cmp(dx, -dy, dy)
+                    is_tan_right = cmp(dy, 0, 10000)
+                    is_tan_left = cmp(dy, -10000, 0)
+                    is_cot_up = cmp(dx, 0, 10000)
+                    is_cot_down = cmp(dx, -10000, 0)
+                    tan_right_edges = np.linspace(-45, 45, num_bins // 4 + 1)
+                    tan_left_edges = np.linspace(135, 225, num_bins // 4 + 1)
+                    cot_up_edges = np.linspace(45, 135, num_bins // 4 + 1)
+                    cot_down_edges = np.linspace(225, 315, num_bins // 4 + 1)
 
-                    new_keypoint = cv2.KeyPoint(*keypoint.pt, keypoint.size, gradient_orientation, keypoint.response, keypoint.octave)
-                    keypoints_with_orientations.append(new_keypoint)
+                    for i, l, r in enumerate(zip(tan_right_edges, tan_right_edges[1:])):
+                        cond = cmp(dy, dx * np.tan(np.deg2rad(l)), dx * np.tan(np.deg2rad(r)))
+                        tan_right_bins[i] += weight * gradient_magnitude * cond * is_tan_right * is_tan
+
+                    for i, l, r in enumerate(zip(tan_left_edges, tan_left_edges[1:])):
+                        cond = cmp(dy, dx * np.tan(np.deg2rad(l)), dx * np.tan(np.deg2rad(r)))
+                        tan_left_bins[i] += weight * gradient_magnitude * cond * is_tan_left * is_tan
+                    
+                    for i, l, r in enumerate(zip(cot_up_edges, cot_up_edges[1:])):
+                        cond = cmp(dx, dy * np.cot(np.deg2rad(l)), dy * np.cot(np.deg2rad(r)))
+                        cot_up_bins[i] += weight * gradient_magnitude * cond * is_cot_up * is_cot
+
+                    for i, l, r in enumerate(zip(cot_down_edges, cot_down_edges[1:])):
+                        cond = cmp(dx, dy * np.cot(np.deg2rad(l)), dy * np.cot(np.deg2rad(r)))
+                        cot_down_bins[i] += weight * gradient_magnitude * cond * is_cot_down * is_cot
+
+                    # raw_histogram[histogram_index % num_bins] += weight * gradient_magnitude
+
+                    # new_keypoint = cv2.KeyPoint(*keypoint.pt, keypoint.size, gradient_orientation, keypoint.response, keypoint.octave)
+                    # keypoints_with_orientations.append(new_keypoint)
 
     # for n in range(num_bins):
     #     smooth_histogram[n] = (6 * raw_histogram[n] + 4 * (raw_histogram[n - 1] + raw_histogram[(n + 1) % num_bins]) + raw_histogram[n - 2] + raw_histogram[(n + 2) % num_bins]) / 16.
