@@ -47,7 +47,7 @@ def generateBaseImage(comm):
     assumed_blur = 0.5
     enc_img = load_image(comm.recv_img())
     ret_img = secGenerateBaseImage(np.array(enc_img), sigma=sigma, assumed_blur=assumed_blur)
-    comm.send_img(ret_img)
+    comm.send_img(ret_img[:,:,0])
 
 def start_server():
     comm = Comm(mode='server')
