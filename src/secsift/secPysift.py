@@ -133,9 +133,10 @@ def secFindScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, 
     return keypoints, flat_list
 
 class EncKeyPoint:
-    def __init__(self, i, j, is_keypoint_present, size, response, angle=None):
+    def __init__(self, i, j, octave, is_keypoint_present, size, response, angle=None):
         self.i = i
         self.j = j
+        self.octave = octave
         self.is_keypoint_present = is_keypoint_present
         self.size = size
         self.response = response
@@ -222,6 +223,7 @@ def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_interva
     keypoint = EncKeyPoint(
         i = i,
         j = j,
+        octave=octave_index,
         is_keypoint_present = condition1 * condition2 * condition3,
         size = sigma * (2 ** ((image_index) / (num_intervals))) * (2 ** (octave_index + 1)),
         # response= secAbs(functionValueAtUpdatedExtremum) # check if needed later
@@ -362,6 +364,7 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
         new_keypoint = EncKeyPoint(
             i = keypoint.i,
             j = keypoint.j,
+            octave=octave_index,
             is_keypoint_present = is_orientation_peak * is_good_peak_value,
 #           interpolated_peak_index = (peak_index + 0.5 * (left_value - right_value) / (left_value - 2 * peak_value + right_value)) % num_bins
             size=keypoint.size,
@@ -383,3 +386,17 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
     #         new_keypoint = KeyPoint(*keypoint.pt, keypoint.size, orientation, keypoint.response, keypoint.octave)
     #         keypoints_with_orientations.append(new_keypoint)
     return keypoints_with_orientations
+
+def convertKeypointsToInputImageSize(keypoints):
+    """Convert keypoint point, size, and octave to input image size
+    """
+    for octave_index in range(len(keypoints)):
+        for image_index in range(len(keypoints[octave_index])):
+            for i in range(len(keypoints[octave_index][image_index])):
+                for j in range(len(keypoints[octave_index][image_index][i])):
+                    for orientation in range(len(keypoints[octave_index][image_index][i][j])):
+                        keypoints[octave_index][image_index][i][j][orientation].i = (0.5 * (keypoints[octave_index][image_index][i][j][orientation].i))
+                        keypoints[octave_index][image_index][i][j][orientation].j = (0.5 * (keypoints[octave_index][image_index][i][j][orientation].j))
+                        keypoints[octave_index][image_index][i][j][orientation].size *= 0.5
+                        keypoints[octave_index][image_index][i][j][orientation].octave = (keypoints[octave_index][image_index][i][j][orientation].octave & ~255) | ((keypoints[octave_index][image_index][i][j][orientation].octave - 1) & 255)
+    return keypoints
