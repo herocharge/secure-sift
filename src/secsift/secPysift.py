@@ -284,6 +284,12 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
     tan_left_bins = np.zeros(num_bins // 4) # when angle is -45 to 45 and the (135 to -135, anticlockwise), abs(dx) > abs(dy)
     cot_up_bins = np.zeros(num_bins // 4) # otherwise, abs(dx) < abs(dy)
     cot_down_bins = np.zeros(num_bins // 4) # otherwise, abs(dx) < abs(dy)
+    
+    tan_right_edges = np.linspace(-45, 45, num_bins // 4 + 1)
+    tan_left_edges = np.linspace(135, 225, num_bins // 4 + 1)
+    cot_up_edges = np.linspace(45, 135, num_bins // 4 + 1)
+    cot_down_edges = np.linspace(225, 315, num_bins // 4 + 1)
+
     for i in range(-radius, radius + 1):
         region_y = int(round(keypoint.pt[1] / np.float32(2 ** octave_index))) + i
         if region_y > 0 and region_y < image_shape[0] - 1:
@@ -302,11 +308,7 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
                     is_tan_left = cmp(dy, -10000, 0)
                     is_cot_up = cmp(dx, 0, 10000)
                     is_cot_down = cmp(dx, -10000, 0)
-                    tan_right_edges = np.linspace(-45, 45, num_bins // 4 + 1)
-                    tan_left_edges = np.linspace(135, 225, num_bins // 4 + 1)
-                    cot_up_edges = np.linspace(45, 135, num_bins // 4 + 1)
-                    cot_down_edges = np.linspace(225, 315, num_bins // 4 + 1)
-
+                    
                     for i, l, r in enumerate(zip(tan_right_edges, tan_right_edges[1:])):
                         cond = cmp(dy, dx * np.tan(np.deg2rad(l)), dx * np.tan(np.deg2rad(r)))
                         tan_right_bins[i] += weight * gradient_magnitude * cond * is_tan_right * is_tan
@@ -327,10 +329,46 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
 
                     # new_keypoint = cv2.KeyPoint(*keypoint.pt, keypoint.size, gradient_orientation, keypoint.response, keypoint.octave)
                     # keypoints_with_orientations.append(new_keypoint)
+    
+    # This starts at -45 and goes anticlockwise
+    bins = np.concatenate((tan_right_bins, cot_up_bins, tan_left_bins, cot_down_bins))
+    for n in range(num_bins):
+        smooth_histogram[n] = (6 * bins[n] + 4 * (bins[n - 1] + bins[(n + 1) % num_bins]) + bins[n - 2] + bins[(n + 2) % num_bins]) / 16.
+    
+    def encmax2(a, b):
+        cond = cmp(b, a, 10000)
+        return (cond) * b + (1 - cond) * (a)
+    
+    orientation_max = smooth_histogram[0]
+    for i in range(1, len(smooth_histogram)):
+        orientation_max = encmax2(orientation_max, smooth_histogram[i])
+    
+    orientation_thresh = peak_ratio * orientation_max
+    orientation_peaks = np.zeros(num_bins)
+    right_shift_histogram = np.roll(smooth_histogram, 1)
+    left_shift_histogram = np.roll(smooth_histogram, -1)
+    keypoints_with_orientations = []
+    angles = np.concatenate((ta))
+    for i in range(num_bins):
+        is_orientation_peak = (cmp(smooth_histogram[i], left_shift_histogram[i], 10000)
+                * cmp(smooth_histogram[i], right_shift_histogram[i]))
+        is_good_peak_value = cmp(smooth_histogram[i], orientation_thresh, 10000)
+        #           interpolated_peak_index = (peak_index + 0.5 * (left_value - right_value) / (left_value - 2 * peak_value + right_value)) % num_bins
+        interpolated_peak_index = i
+        orientation = 360. - (interpolated_peak_index * 360. / num_bins - 45) # because use started at 45
+        if abs(orientation - 360.) < 0.01:
+            orientation = 0
 
-    # for n in range(num_bins):
-    #     smooth_histogram[n] = (6 * raw_histogram[n] + 4 * (raw_histogram[n - 1] + raw_histogram[(n + 1) % num_bins]) + raw_histogram[n - 2] + raw_histogram[(n + 2) % num_bins]) / 16.
-    # orientation_max = max(smooth_histogram)
+        new_keypoint = EncKeyPoint(
+            i = keypoint.i,
+            j = keypoint.j,
+            is_keypoint_present = is_orientation_peak * is_good_peak_value,
+#           interpolated_peak_index = (peak_index + 0.5 * (left_value - right_value) / (left_value - 2 * peak_value + right_value)) % num_bins
+            size=keypoint.size,
+            response=keypoint.response,
+            angle=orientation,
+        )
+        keypoints_with_orientations.append(new_keypoint)
     # orientation_peaks = np.where(np.logical_and(smooth_histogram > np.roll(smooth_histogram, 1), smooth_histogram > np.roll(smooth_histogram, -1)))[0]
     # for peak_index in orientation_peaks:
     #     peak_value = smooth_histogram[peak_index]
@@ -339,10 +377,9 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
     #         # The interpolation update is given by equation (6.30) in https://ccrma.stanford.edu/~jos/sasp/Quadratic_Interpolation_Spectral_Peaks.html
     #         left_value = smooth_histogram[(peak_index - 1) % num_bins]
     #         right_value = smooth_histogram[(peak_index + 1) % num_bins]
-    #         interpolated_peak_index = (peak_index + 0.5 * (left_value - right_value) / (left_value - 2 * peak_value + right_value)) % num_bins
     #         orientation = 360. - interpolated_peak_index * 360. / num_bins
     #         if abs(orientation - 360.) < float_tolerance:
     #             orientation = 0
     #         new_keypoint = KeyPoint(*keypoint.pt, keypoint.size, orientation, keypoint.response, keypoint.octave)
     #         keypoints_with_orientations.append(new_keypoint)
-    # return keypoints_with_orientations
+    return keypoints_with_orientations
