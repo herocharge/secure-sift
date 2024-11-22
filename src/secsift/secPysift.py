@@ -348,7 +348,7 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
     right_shift_histogram = np.roll(smooth_histogram, 1)
     left_shift_histogram = np.roll(smooth_histogram, -1)
     keypoints_with_orientations = []
-    angles = np.concatenate((ta))
+    # angles = np.concatenate((ta))
     for i in range(num_bins):
         is_orientation_peak = (cmp(smooth_histogram[i], left_shift_histogram[i], 10000)
                 * cmp(smooth_histogram[i], right_shift_histogram[i]))
