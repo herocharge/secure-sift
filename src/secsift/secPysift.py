@@ -122,8 +122,8 @@ def secFindScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, 
                     # if isPixelAnExtremum(first_image[i-1:i+2, j-1:j+2], second_image[i-1:i+2, j-1:j+2], third_image[i-1:i+2, j-1:j+2], threshold):
                     keypoint = localizeExtremumViaQuadraticFit(i, j, image_index + 1, octave_index, num_intervals, dog_images_in_octave, sigma, contrast_threshold, image_border_width, cmp=cmp, refresh = refresh)
                     
-                    # keypoints_with_orientations = computeKeypointsWithOrientations(keypoint, octave_index, gaussian_images[octave_index][localized_image_index])
-                    keypoints_with_orientations = [keypoint]*36
+                    keypoints_with_orientations = computeKeypointsWithOrientations(keypoint, octave_index, gaussian_images[octave_index][image_index + 1], cmp=cmp, refresh = refresh)
+                    # keypoints_with_orientations = [keypoint]*36
                     flat_list.append(keypoints_with_orientations)
                     row_keypoints.append(keypoints_with_orientations)
                 img_keypoints.append(row_keypoints)
@@ -268,7 +268,7 @@ def computeHessianAtCenterPixel(pixel_array):
 # # Keypoint orientations #
 # #########################
 
-def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, radius_factor=3, num_bins=36, peak_ratio=0.8, scale_factor=1.5):
+def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, radius_factor=3, num_bins=36, peak_ratio=0.8, scale_factor=1.5, cmp=None, refresh = lambda x: x):
     """Compute orientations for each keypoint
     """
     # logger.debug('Computing keypoint orientations...')
@@ -280,25 +280,31 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
     weight_factor = -0.5 / (scale ** 2)
     raw_histogram = np.zeros(num_bins)
     smooth_histogram = np.zeros(num_bins)
-    tan_right_bins = np.zeros(num_bins // 4) # when angle is -45 to 45 and the (135 to -135, anticlockwise), abs(dx) > abs(dy)
-    tan_left_bins = np.zeros(num_bins // 4) # when angle is -45 to 45 and the (135 to -135, anticlockwise), abs(dx) > abs(dy)
-    cot_up_bins = np.zeros(num_bins // 4) # otherwise, abs(dx) < abs(dy)
-    cot_down_bins = np.zeros(num_bins // 4) # otherwise, abs(dx) < abs(dy)
+    encrypted_1 = gaussian_image[0, 0]
+    tan_right_bins = np.zeros(num_bins // 4) * encrypted_1    # when angle is -45 to 45 and the (135 to -135, anticlockwise), abs(dx) > abs(dy)
+    tan_left_bins = np.zeros(num_bins // 4) * encrypted_1     # when angle is -45 to 45 and the (135 to -135, anticlockwise), abs(dx) > abs(dy)
+    cot_up_bins = np.zeros(num_bins // 4) * encrypted_1       # otherwise, abs(dx) < abs(dy)
+    cot_down_bins = np.zeros(num_bins // 4) * encrypted_1      # otherwise, abs(dx) < abs(dy)
     
+    print("tan_right_bins : ", tan_right_bins +1)
+
     tan_right_edges = np.linspace(-45, 45, num_bins // 4 + 1)
     tan_left_edges = np.linspace(135, 225, num_bins // 4 + 1)
     cot_up_edges = np.linspace(45, 135, num_bins // 4 + 1)
     cot_down_edges = np.linspace(225, 315, num_bins // 4 + 1)
 
+
+
     for i in range(-radius, radius + 1):
-        region_y = int(round(keypoint.pt[1] / np.float32(2 ** octave_index))) + i
+        region_y = int(round(keypoint.j / np.float32(2 ** octave_index))) + i
         if region_y > 0 and region_y < image_shape[0] - 1:
             for j in range(-radius, radius + 1):
-                region_x = int(round(keypoint.pt[0] / np.float32(2 ** octave_index))) + j
+                region_x = int(round(keypoint.i / np.float32(2 ** octave_index))) + j
                 if region_x > 0 and region_x < image_shape[1] - 1:
                     dx = gaussian_image[region_y, region_x + 1] - gaussian_image[region_y, region_x - 1]
                     dy = gaussian_image[region_y - 1, region_x] - gaussian_image[region_y + 1, region_x]
-                    gradient_magnitude = sqrt(dx * dx + dy * dy)
+                    gradient_magnitude = dx * dx + dy * dy
+                    # TODO :square root
                     # gradient_orientation = np.rad2deg(np.arctan2(dy, dx))
                     weight = np.exp(weight_factor * (i ** 2 + j ** 2))  # constant in front of exponential can be dropped because we will find peaks later
                     # histogram_index = int(round(gradient_orientation * num_bins / 360.))
@@ -308,20 +314,34 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
                     is_tan_left = cmp(dy, -10000, 0)
                     is_cot_up = cmp(dx, 0, 10000)
                     is_cot_down = cmp(dx, -10000, 0)
+
+                    print("weight : ", weight)
+                    print("gradient_magnitude : ", gradient_magnitude)
+                    print("dx : ", dx)
+                    print("dy : ", dy)
+                    print("is_tan : ", is_tan)
+                    print("is_cot : ", is_cot)
+                    print("is_tan_right : ", is_tan_right)
+                    print("is_tan_left : ", is_tan_left)
                     
-                    for i, l, r in enumerate(zip(tan_right_edges, tan_right_edges[1:])):
+                    for i, (l, r) in enumerate(zip(tan_right_edges, tan_right_edges[1:])):
                         cond = cmp(dy, dx * np.tan(np.deg2rad(l)), dx * np.tan(np.deg2rad(r)))
+                        print("tan_right_bins[i] : ", tan_right_bins[i])
+                        tan_right_bins[i] += weight 
+                        tan_right_bins[i] += weight * gradient_magnitude 
+                        tan_right_bins[i] += weight * gradient_magnitude * cond
+                        tan_right_bins[i] += weight * gradient_magnitude * cond * is_tan_right 
                         tan_right_bins[i] += weight * gradient_magnitude * cond * is_tan_right * is_tan
 
-                    for i, l, r in enumerate(zip(tan_left_edges, tan_left_edges[1:])):
+                    for i, (l, r) in enumerate(zip(tan_left_edges, tan_left_edges[1:])):
                         cond = cmp(dy, dx * np.tan(np.deg2rad(l)), dx * np.tan(np.deg2rad(r)))
                         tan_left_bins[i] += weight * gradient_magnitude * cond * is_tan_left * is_tan
                     
-                    for i, l, r in enumerate(zip(cot_up_edges, cot_up_edges[1:])):
+                    for i, (l, r) in enumerate(zip(cot_up_edges, cot_up_edges[1:])):
                         cond = cmp(dx, dy * np.cot(np.deg2rad(l)), dy * np.cot(np.deg2rad(r)))
                         cot_up_bins[i] += weight * gradient_magnitude * cond * is_cot_up * is_cot
 
-                    for i, l, r in enumerate(zip(cot_down_edges, cot_down_edges[1:])):
+                    for i, (l, r) in enumerate(zip(cot_down_edges, cot_down_edges[1:])):
                         cond = cmp(dx, dy * np.cot(np.deg2rad(l)), dy * np.cot(np.deg2rad(r)))
                         cot_down_bins[i] += weight * gradient_magnitude * cond * is_cot_down * is_cot
 
