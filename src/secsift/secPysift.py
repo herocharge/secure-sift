@@ -2,6 +2,7 @@ from primitives import *
 from primitives import *
 from numpy import sqrt, log
 from tqdm import tqdm
+import numpy as np
 
 # DEBUG=1
 def secGenerateBaseImage(image, sigma, assumed_blur, kernel_size=3):
@@ -133,13 +134,14 @@ def secFindScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, 
     return keypoints, flat_list
 
 class EncKeyPoint:
-    def __init__(self, i, j, is_keypoint_present, size, response, angle=None):
+    def __init__(self, i, j, octave, is_keypoint_present, size, response, angle=None):
         self.i = i
         self.j = j
         self.is_keypoint_present = is_keypoint_present
         self.size = size
         self.response = response
         self.angle = angle
+        self.octave = octave
     
 
 def isPixelAnExtremum(first_subimage, second_subimage, third_subimage, threshold):
@@ -222,6 +224,7 @@ def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_interva
     keypoint = EncKeyPoint(
         i = i,
         j = j,
+        octave = octave_index,
         is_keypoint_present = condition1 * condition2 * condition3,
         size = sigma * (2 ** ((image_index) / (num_intervals))) * (2 ** (octave_index + 1)),
         # response= secAbs(functionValueAtUpdatedExtremum) # check if needed later
@@ -326,11 +329,7 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
                     
                     for i, (l, r) in enumerate(zip(tan_right_edges, tan_right_edges[1:])):
                         cond = cmp(dy, dx * np.tan(np.deg2rad(l)), dx * np.tan(np.deg2rad(r)))
-                        print("tan_right_bins[i] : ", tan_right_bins[i])
-                        tan_right_bins[i] += weight 
-                        tan_right_bins[i] += weight * gradient_magnitude 
-                        tan_right_bins[i] += weight * gradient_magnitude * cond
-                        tan_right_bins[i] += weight * gradient_magnitude * cond * is_tan_right 
+                        # print("tan_right_bins[i] : ", tan_right_bins[i])
                         tan_right_bins[i] += weight * gradient_magnitude * cond * is_tan_right * is_tan
 
                     for i, (l, r) in enumerate(zip(tan_left_edges, tan_left_edges[1:])):
@@ -382,6 +381,7 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
         new_keypoint = EncKeyPoint(
             i = keypoint.i,
             j = keypoint.j,
+            octave = keypoint.octave,
             is_keypoint_present = is_orientation_peak * is_good_peak_value,
 #           interpolated_peak_index = (peak_index + 0.5 * (left_value - right_value) / (left_value - 2 * peak_value + right_value)) % num_bins
             size=keypoint.size,
@@ -403,3 +403,152 @@ def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, rad
     #         new_keypoint = KeyPoint(*keypoint.pt, keypoint.size, orientation, keypoint.response, keypoint.octave)
     #         keypoints_with_orientations.append(new_keypoint)
     return keypoints_with_orientations
+
+
+def unpackOctave(keypoint):
+    """Compute octave, layer, and scale from a keypoint
+    """
+    octave = keypoint.octave & 255
+    layer = (keypoint.octave >> 8) & 255
+    if octave >= 128:
+        octave = octave | -128
+    scale = 1 / float32(1 << octave) if octave >= 0 else float32(1 << -octave)
+    return octave, layer, scale
+
+def find_angle(dx, dy, num_bins=360, cmp=None):
+    tan_right_bins = np.zeros(num_bins // 4) * dx    # when angle is -45 to 45 and the (135 to -135, anticlockwise), abs(dx) > abs(dy)
+    tan_left_bins = np.zeros(num_bins // 4) * dx     # when angle is -45 to 45 and the (135 to -135, anticlockwise), abs(dx) > abs(dy)
+    cot_up_bins = np.zeros(num_bins // 4) * dx       # otherwise, abs(dx) < abs(dy)
+    cot_down_bins = np.zeros(num_bins // 4) * dx      # otherwise, abs(dx) < abs(dy)
+    
+    print("tan_right_bins : ", tan_right_bins +1)
+
+    tan_right_edges = np.linspace(-45, 45, num_bins // 4 + 1)
+    tan_left_edges = np.linspace(135, 225, num_bins // 4 + 1)
+    cot_up_edges = np.linspace(45, 135, num_bins // 4 + 1)
+    cot_down_edges = np.linspace(225, 315, num_bins // 4 + 1)
+
+    for i, (l, r) in enumerate(zip(tan_right_edges, tan_right_edges[1:])):
+        cond = cmp(dy, dx * np.tan(np.deg2rad(l)), dx * np.tan(np.deg2rad(r)))
+        tan_right_bins[i] += cond
+
+    for i, (l, r) in enumerate(zip(tan_left_edges, tan_left_edges[1:])):
+        cond = cmp(dy, dx * np.tan(np.deg2rad(l)), dx * np.tan(np.deg2rad(r)))
+        tan_left_bins[i] += cond
+
+    for i, (l, r) in enumerate(zip(cot_up_edges, cot_up_edges[1:])):
+        cond = cmp(dx, dy * np.cot(np.deg2rad(l)), dy * np.cot(np.deg2rad(r)))
+        cot_up_bins[i] += cond
+
+    for i, (l, r) in enumerate(zip(cot_down_edges, cot_down_edges[1:])):
+        cond = cmp(dx, dy * np.cot(np.deg2rad(l)), dy * np.cot(np.deg2rad(r)))
+        cot_down_bins[i] += cond
+
+    bins = np.concatenate((tan_right_bins, cot_up_bins, tan_left_bins, cot_down_bins))
+    angle = 0 * dx
+    for i, ngl in enumerate(np.linspace(-45, 360 - 45, num_bins)):
+        angle += bins[i] * (ngl + 360)%360
+    return angle
+
+
+def generateDescriptors(keypoints, gaussian_images, window_width=4, num_bins=8, scale_multiplier=3, descriptor_max_value=0.2, refresh=None, cmp=None):
+    """Generate descriptors for each keypoint
+    """
+    logger.debug('Generating descriptors...')
+    descriptors = []
+    is_key_point_present = []
+    for keypoint in keypoints: # loop over every pixel and orientation of everyimage
+        octave, layer, scale = unpackOctave(keypoint) # all unencrypted (TODO: store octave)
+        gaussian_image = gaussian_images[octave + 1, layer] # encrypted
+        num_rows, num_cols = gaussian_image.shape # unenc
+        point  = round(scale * np.array([keypoint.i, keypoint.j])).astype('int') # unenc
+        bins_per_degree = num_bins / 360. # unenc
+        angle = 360. - keypoint.angle # unenc
+        cos_angle = np.cos(np.deg2rad(angle)) # unenc
+        sin_angle = np.sin(np.deg2rad(angle)) # unenc
+        weight_multiplier = -0.5 / ((0.5 * window_width) ** 2) # unenc
+        # row_bin_list = []
+        # col_bin_list = []
+        # magnitude_list = []
+        # orientation_bin_list = []
+        histogram_tensor = zeros((window_width + 2, window_width + 2, num_bins))   # first two dimensions are increased by 2 to account for border effects
+
+        # Descriptor window size (described by half_width) follows OpenCV convention
+        hist_width = scale_multiplier * 0.5 * scale * keypoint.size # unenc
+        half_width = int(round(hist_width * sqrt(2) * (window_width + 1) * 0.5)) # unenc   # sqrt(2) corresponds to diagonal length of a pixel
+        half_width = int(min(half_width, sqrt(num_rows ** 2 + num_cols ** 2))) # unenc    # ensure half_width lies within image
+
+        for row in range(-half_width, half_width + 1):
+            for col in range(-half_width, half_width + 1):
+                row_rot = col * sin_angle + row * cos_angle # unenc
+                col_rot = col * cos_angle - row * sin_angle # unenc
+                row_bin = (row_rot / hist_width) + 0.5 * window_width - 0.5 # unenc
+                col_bin = (col_rot / hist_width) + 0.5 * window_width - 0.5 # unenc
+                if row_bin > -1 and row_bin < window_width and col_bin > -1 and col_bin < window_width: # unenc comp
+                    window_row = int(round(point[1] + row))  # unenc
+                    window_col = int(round(point[0] + col)) # unenc
+                    if window_row > 0 and window_row < num_rows - 1 and window_col > 0 and window_col < num_cols - 1: # unenc comp
+                        dx = gaussian_image[window_row, window_col + 1] - gaussian_image[window_row, window_col - 1] # enc
+                        dy = gaussian_image[window_row - 1, window_col] - gaussian_image[window_row + 1, window_col] # enc
+                        gradient_magnitude = (dx * dx + dy * dy) # enc # Note: removed sqrt
+                        gradient_orientation = find_angle(dx, dy, cmp=cmp)
+                        # gradient_orientation = rad2deg(arctan2(dy, dx)) % 360 # enc (onehot)
+                        weight = exp(weight_multiplier * ((row_rot / hist_width) ** 2 + (col_rot / hist_width) ** 2)) # unenc
+                        # row_bin_list.append(row_bin) # unenc
+                        # col_bin_list.append(col_bin) # unenc
+                        # magnitude_list.append(weight * gradient_magnitude) # enc
+                        magnitude = weight * gradient_magnitude
+                        # First binnning to find out the angle (360)
+                        # Second binning to find out which bin it lies in
+                        # subtract the start of the bin to get the frac value of orientation
+                        # the start of the bin will be the round value
+                        orientation_bin = (gradient_orientation - angle) * bins_per_degree
+                        # orientation_bin_list.append((gradient_orientation - angle) * bins_per_degree)
+                        for orientation_bin_floor in range(num_bins):
+                            cond = cmp(orientation_bin, orientation_bin_floor, orientation_bin_floor + 1)
+                            row_bin_floor, col_bin_floor = floor([row_bin, col_bin]).astype(int)
+                            row_fraction, col_fraction = row_bin - row_bin_floor, col_bin - col_bin_floor
+                            orientation_fraction = (orientation_bin - orientation_bin_floor) * cond
+                            # Not possible (TODO: verify this)
+                            # if orientation_bin_floor < 0:
+                            #     orientation_bin_floor += num_bins
+                            # if orientation_bin_floor >= num_bins:
+                            #     orientation_bin_floor -= num_bins
+
+                            c1 = magnitude * row_fraction
+                            c0 = magnitude * (1 - row_fraction)
+                            c11 = c1 * col_fraction
+                            c10 = c1 * (1 - col_fraction)
+                            c01 = c0 * col_fraction
+                            c00 = c0 * (1 - col_fraction)
+                            c111 = c11 * orientation_fraction
+                            c110 = c11 * (1 - orientation_fraction)
+                            c101 = c10 * orientation_fraction
+                            c100 = c10 * (1 - orientation_fraction)
+                            c011 = c01 * orientation_fraction
+                            c010 = c01 * (1 - orientation_fraction)
+                            c001 = c00 * orientation_fraction
+                            c000 = c00 * (1 - orientation_fraction)
+
+                            histogram_tensor[row_bin_floor + 1, col_bin_floor + 1, orientation_bin_floor] += c000 * cond
+                            histogram_tensor[row_bin_floor + 1, col_bin_floor + 1, (orientation_bin_floor + 1) % num_bins] += c001 * cond
+                            histogram_tensor[row_bin_floor + 1, col_bin_floor + 2, orientation_bin_floor] += c010 * cond
+                            histogram_tensor[row_bin_floor + 1, col_bin_floor + 2, (orientation_bin_floor + 1) % num_bins] += c011 * cond
+                            histogram_tensor[row_bin_floor + 2, col_bin_floor + 1, orientation_bin_floor] += c100 * cond
+                            histogram_tensor[row_bin_floor + 2, col_bin_floor + 1, (orientation_bin_floor + 1) % num_bins] += c101 * cond
+                            histogram_tensor[row_bin_floor + 2, col_bin_floor + 2, orientation_bin_floor] += c110 * cond 
+                            histogram_tensor[row_bin_floor + 2, col_bin_floor + 2, (orientation_bin_floor + 1) % num_bins] += c111 * cond
+
+        descriptor_vector = histogram_tensor[1:-1, 1:-1, :].flatten()  # Remove histogram borders
+        # TODO: Scaling and thresholding can be done later
+        # Threshold and normalize descriptor_vector
+        # threshold = norm(descriptor_vector) * descriptor_max_value
+        # descriptor_vector[descriptor_vector > threshold] = threshold
+        # descriptor_vector /= max(norm(descriptor_vector), float_tolerance)
+        # # Multiply by 512, round, and saturate between 0 and 255 to convert from float32 to unsigned char (OpenCV convention)
+        # descriptor_vector = round(512 * descriptor_vector)
+        # descriptor_vector[descriptor_vector < 0] = 0
+        # descriptor_vector[descriptor_vector > 255] = 255
+        descriptors.append(descriptor_vector)
+        is_keypoint_present.append(keypoint.is_keypoint_present)
+    return np.array(descriptors)
