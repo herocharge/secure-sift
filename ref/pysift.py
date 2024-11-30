@@ -337,16 +337,16 @@ def generateDescriptors(keypoints, gaussian_images, window_width=4, num_bins=8, 
     logger.debug('Generating descriptors...')
     descriptors = []
 
-    for keypoint in keypoints:
-        octave, layer, scale = unpackOctave(keypoint)
-        gaussian_image = gaussian_images[octave + 1, layer]
-        num_rows, num_cols = gaussian_image.shape
-        point = round(scale * array(keypoint.pt)).astype('int')
-        bins_per_degree = num_bins / 360.
-        angle = 360. - keypoint.angle
-        cos_angle = cos(deg2rad(angle))
-        sin_angle = sin(deg2rad(angle))
-        weight_multiplier = -0.5 / ((0.5 * window_width) ** 2)
+    for keypoint in keypoints: # loop over every pixel and orientation of everyimage
+        octave, layer, scale = unpackOctave(keypoint) # all unencrypted (TODO: store octave)
+        gaussian_image = gaussian_images[octave + 1, layer] # encrypted
+        num_rows, num_cols = gaussian_image.shape # unenc
+        point  = round(scale * array(keypoint.pt)).astype('int') # unenc
+        bins_per_degree = num_bins / 360. # unenc
+        angle = 360. - keypoint.angle # unenc
+        cos_angle = cos(deg2rad(angle)) # unenc
+        sin_angle = sin(deg2rad(angle)) # unenc
+        weight_multiplier = -0.5 / ((0.5 * window_width) ** 2) # unenc
         row_bin_list = []
         col_bin_list = []
         magnitude_list = []
@@ -354,28 +354,34 @@ def generateDescriptors(keypoints, gaussian_images, window_width=4, num_bins=8, 
         histogram_tensor = zeros((window_width + 2, window_width + 2, num_bins))   # first two dimensions are increased by 2 to account for border effects
 
         # Descriptor window size (described by half_width) follows OpenCV convention
-        hist_width = scale_multiplier * 0.5 * scale * keypoint.size
-        half_width = int(round(hist_width * sqrt(2) * (window_width + 1) * 0.5))   # sqrt(2) corresponds to diagonal length of a pixel
-        half_width = int(min(half_width, sqrt(num_rows ** 2 + num_cols ** 2)))     # ensure half_width lies within image
+        hist_width = scale_multiplier * 0.5 * scale * keypoint.size # unenc
+        half_width = int(round(hist_width * sqrt(2) * (window_width + 1) * 0.5)) # unenc   # sqrt(2) corresponds to diagonal length of a pixel
+        half_width = int(min(half_width, sqrt(num_rows ** 2 + num_cols ** 2))) # unenc    # ensure half_width lies within image
 
         for row in range(-half_width, half_width + 1):
             for col in range(-half_width, half_width + 1):
-                row_rot = col * sin_angle + row * cos_angle
-                col_rot = col * cos_angle - row * sin_angle
-                row_bin = (row_rot / hist_width) + 0.5 * window_width - 0.5
-                col_bin = (col_rot / hist_width) + 0.5 * window_width - 0.5
-                if row_bin > -1 and row_bin < window_width and col_bin > -1 and col_bin < window_width:
-                    window_row = int(round(point[1] + row))
-                    window_col = int(round(point[0] + col))
-                    if window_row > 0 and window_row < num_rows - 1 and window_col > 0 and window_col < num_cols - 1:
-                        dx = gaussian_image[window_row, window_col + 1] - gaussian_image[window_row, window_col - 1]
-                        dy = gaussian_image[window_row - 1, window_col] - gaussian_image[window_row + 1, window_col]
-                        gradient_magnitude = sqrt(dx * dx + dy * dy)
-                        gradient_orientation = rad2deg(arctan2(dy, dx)) % 360
-                        weight = exp(weight_multiplier * ((row_rot / hist_width) ** 2 + (col_rot / hist_width) ** 2))
-                        row_bin_list.append(row_bin)
-                        col_bin_list.append(col_bin)
-                        magnitude_list.append(weight * gradient_magnitude)
+                row_rot = col * sin_angle + row * cos_angle # unenc
+                col_rot = col * cos_angle - row * sin_angle # unenc
+                row_bin = (row_rot / hist_width) + 0.5 * window_width - 0.5 # unenc
+                col_bin = (col_rot / hist_width) + 0.5 * window_width - 0.5 # unenc
+                if row_bin > -1 and row_bin < window_width and col_bin > -1 and col_bin < window_width: # unenc comp
+                    window_row = int(round(point[1] + row))  # unenc
+                    window_col = int(round(point[0] + col)) # unenc
+                    if window_row > 0 and window_row < num_rows - 1 and window_col > 0 and window_col < num_cols - 1: # unenc comp
+                        dx = gaussian_image[window_row, window_col + 1] - gaussian_image[window_row, window_col - 1] # enc
+                        dy = gaussian_image[window_row - 1, window_col] - gaussian_image[window_row + 1, window_col] # enc
+                        gradient_magnitude = sqrt(dx * dx + dy * dy) # enc
+                        gradient_orientation = rad2deg(arctan2(dy, dx)) % 360 # enc (onehot)
+                        weight = exp(weight_multiplier * ((row_rot / hist_width) ** 2 + (col_rot / hist_width) ** 2)) # unenc
+                        row_bin_list.append(row_bin) # unenc
+                        col_bin_list.append(col_bin) # unenc
+                        magnitude_list.append(weight * gradient_magnitude) # enc
+
+                        # First binnning to find out the angle (360)
+                        # Second binning to find out which bin it lies in
+                        # subtract the start of the bin to get the frac value of orientation
+                        # the start of the bin will be the round value
+
                         orientation_bin_list.append((gradient_orientation - angle) * bins_per_degree)
 
         for row_bin, col_bin, magnitude, orientation_bin in zip(row_bin_list, col_bin_list, magnitude_list, orientation_bin_list):
