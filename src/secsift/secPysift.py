@@ -143,6 +143,7 @@ class EncKeyPoint:
     def __init__(self, i, j, octave, is_keypoint_present, size, response, angle=None):
         self.i = i
         self.j = j
+        self.octave = octave
         self.is_keypoint_present = is_keypoint_present
         self.size = size
         self.response = response
