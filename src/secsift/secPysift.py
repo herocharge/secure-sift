@@ -1,10 +1,10 @@
-from primitives import *
-from primitives import *
+from secsift.primitives import *
+# from primitives import *
 from numpy import sqrt, log
 from tqdm import tqdm
 import numpy as np
 
-# DEBUG=1
+DEBUG=0
 def secGenerateBaseImage(image, sigma, assumed_blur, kernel_size=3):
     """
         Only image is encrypted

@@ -1,0 +1,86 @@
+Traceback (most recent call last):
+  File "defer.py", line 130, in <module>
+    serialized_num = dill.dumps(d)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 288, in dumps
+    dump(obj, file, protocol, byref, fmode, recurse, **kwds)#, strictio)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 260, in dump
+    Pickler(file, protocol, **_kwds).dump(obj)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 428, in dump
+    StockPickler.dump(self, obj)
+  File "/usr/lib/python3.8/pickle.py", line 487, in dump
+    self.save(obj)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 603, in save
+    self.save_reduce(obj=obj, *rv)
+  File "/usr/lib/python3.8/pickle.py", line 717, in save_reduce
+    save(state)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 560, in save
+    f(self, obj)  # Call unbound method with explicit self
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 1233, in save_module_dict
+    StockPickler.save_dict(pickler, obj)
+  File "/usr/lib/python3.8/pickle.py", line 971, in save_dict
+    self._batch_setitems(obj.items())
+  File "/usr/lib/python3.8/pickle.py", line 997, in _batch_setitems
+    save(v)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 560, in save
+    f(self, obj)  # Call unbound method with explicit self
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 2013, in save_function
+    _save_with_postproc(pickler, (_create_function, (
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 1133, in _save_with_postproc
+    pickler.save_reduce(*reduction)
+  File "/usr/lib/python3.8/pickle.py", line 692, in save_reduce
+    save(args)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 560, in save
+    f(self, obj)  # Call unbound method with explicit self
+  File "/usr/lib/python3.8/pickle.py", line 886, in save_tuple
+    save(element)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 603, in save
+    self.save_reduce(obj=obj, *rv)
+  File "/usr/lib/python3.8/pickle.py", line 717, in save_reduce
+    save(state)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 560, in save
+    f(self, obj)  # Call unbound method with explicit self
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 1233, in save_module_dict
+    StockPickler.save_dict(pickler, obj)
+  File "/usr/lib/python3.8/pickle.py", line 971, in save_dict
+    self._batch_setitems(obj.items())
+  File "/usr/lib/python3.8/pickle.py", line 997, in _batch_setitems
+    save(v)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 560, in save
+    f(self, obj)  # Call unbound method with explicit self
+  File "/usr/lib/python3.8/pickle.py", line 886, in save_tuple
+    save(element)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 603, in save
+    self.save_reduce(obj=obj, *rv)
+  File "/usr/lib/python3.8/pickle.py", line 717, in save_reduce
+    save(state)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 560, in save
+    f(self, obj)  # Call unbound method with explicit self
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 1233, in save_module_dict
+    StockPickler.save_dict(pickler, obj)
+  File "/usr/lib/python3.8/pickle.py", line 971, in save_dict
+    self._batch_setitems(obj.items())
+  File "/usr/lib/python3.8/pickle.py", line 1002, in _batch_setitems
+    save(v)
+  File "/home/bhargav/.local/lib/python3.8/site-packages/dill/_dill.py", line 422, in save
+    StockPickler.save(self, obj, save_persistent_id)
+  File "/usr/lib/python3.8/pickle.py", line 578, in save
+    rv = reduce(self.proto)
+TypeError: cannot pickle '_tenseal_cpp.CKKSVector' object

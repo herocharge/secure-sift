@@ -99,3 +99,23 @@ class Comm:
                 recv_row.append(self.receive_bytes())
             img.append(recv_row)
         return img
+    
+    
+    def check_interactive(self, cmp=None, refresh=None):
+        while True:
+            api_name = self.receive_bytes().decode()
+            # print(api_name)
+            if api_name == 'end_interaction':
+                break
+            elif api_name == 'cmp':
+                x = self.receive_bytes().decode()
+                a = self.receive_bytes().decode()
+                b = self.receive_bytes().decode()
+                self.send_bytes(cmp(x, a, b))
+            elif api_name == 'refresh':
+                x = self.receive_bytes().decode()
+                self.send_bytes(refresh(x))
+        
+
+    def end_interactive(self):
+        self.send_bytes(b'end_interaction')
