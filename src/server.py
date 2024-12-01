@@ -38,11 +38,11 @@ def serialize_pyramid(img):
     enc_pyramid = []
     for octave in range(len(img)):
         enc_octave = []
-        for size in range(len(img[0])):
+        for size in range(len(img[octave])):
             enc_img = []
-            for row in range(len(img[0][0])):
+            for row in range(len(img[octave][size])):
                 enc_row = []
-                for col in range(len(img[0][0][0])):
+                for col in range(len(img[octave][size][row])):
                     enc_row.append((img[octave][size][row][col].serialize()))
                 enc_img.append(enc_row)
             enc_octave.append(enc_img)
@@ -55,11 +55,11 @@ def load_pyramid(img):
     enc_pyramid = []
     for octave in range(len(img)):
         enc_octave = []
-        for size in range(len(img[0])):
+        for size in range(len(img[octave])):
             enc_img = []
-            for row in range(len(img[0][0])):
+            for row in range(len(img[octave][size])):
                 enc_row = []
-                for col in range(len(img[0][0][0])):
+                for col in range(len(img[octave][size][row])):
                     enc_row.append(ts.ckks_vector_from(context, img[octave][size][row][col]))
                 enc_img.append(enc_row)
             enc_octave.append(np.array(enc_img))

@@ -41,11 +41,11 @@ def encrypt_pyramid(context, img):
     enc_pyramid = []
     for octave in range(len(img)):
         enc_octave = []
-        for size in range(len(img[0])):
+        for size in range(len(img[octave])):
             enc_img = []
-            for row in range(len(img[0][0])):
+            for row in range(len(img[octave][size])):
                 enc_row = []
-                for col in range(len(img[0][0][0])):
+                for col in range(len(img[octave][size][row])):
                     enc_row.append(ts.ckks_vector(context, img[octave][size][row][col]))
                 enc_img.append(enc_row)
             enc_octave.append(enc_img)
@@ -74,11 +74,11 @@ def load_pyramid(context, img):
     enc_pyramid = []
     for octave in range(len(img)):
         enc_octave = []
-        for size in range(len(img[0])):
+        for size in range(len(img[octave])):
             enc_img = []
-            for row in range(len(img[0][0])):
+            for row in range(len(img[octave][size])):
                 enc_row = []
-                for col in range(len(img[0][0][0])):
+                for col in range(len(img[octave][size][row])):
                     enc_row.append(ts.ckks_vector_from(context, img[octave][size][row][col]))
                 enc_img.append(enc_row)
             enc_octave.append(enc_img)
@@ -89,11 +89,11 @@ def serialize_pyramid(context, img):
     enc_pyramid = []
     for octave in range(len(img)):
         enc_octave = []
-        for size in range(len(img[0])):
+        for size in range(len(img[octave])):
             enc_img = []
-            for row in range(len(img[0][0])):
+            for row in range(len(img[octave][size])):
                 enc_row = []
-                for col in range(len(img[0][0][0])):
+                for col in range(len(img[octave][size][row])):
                     enc_row.append((img[octave][size][row][col].serialize()))
                 enc_img.append(enc_row)
             enc_octave.append(enc_img)
@@ -102,13 +102,14 @@ def serialize_pyramid(context, img):
 
 def show_pyramid(img, secret_key):
     for octave in range(len(img)):
-        for size in range(len(img[0])):
+        for size in range(len(img[octave])):
             base_img = ([[int(col.decrypt(secret_key)[0]) for col in row] for row in img[0][0]])
             plt.imshow(base_img)
             plt.show()
 
 
 def main():
+    # Client Side
     comm = Comm()
     comm.start_client()
     context, secret_key = init_enc()
