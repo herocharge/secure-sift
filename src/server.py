@@ -108,6 +108,55 @@ def generateGaussianImages(comm : Comm):
     comm.end_interactive()
     comm.send_bytes(dill.dumps(serialize_pyramid(gaussian_kernels)))
 
+def generateDoGImages(comm : Comm):
+    global context
+    gaussian_images = load_pyramid(dill.loads(comm.receive_bytes()))
+    dog_images = secGenerateDoGImages(gaussian_images)
+    comm.end_interactive()
+    comm.send_bytes(dill.dumps(serialize_pyramid(dog_images)))
+
+def findScaleSpaceExtrema(comm : Comm):
+    global context
+    gaussian_images = load_pyramid(dill.loads(comm.receive_bytes()))
+    dog_images = load_pyramid(dill.loads(comm.receive_bytes()))
+    sigma = dill.loads(comm.receive_bytes())
+    image_border_width = dill.loads(comm.receive_bytes())
+    cmp_count = 0
+    refresh_count = 0
+    def cmp(x, a, b):
+        cmp_count += 1
+        x_enc = False
+        a_enc = False
+        b_enc = False
+        if isinstance(x, ts.CKKSVector):
+            x = x.serialize()
+            x_enc = True
+        if isinstance(a, ts.CKKSVector):
+            a = a.serialize()
+            a_enc = True
+        if isinstance(b, ts.CKKSVector):
+            b = b.serialize()
+            b_enc = True
+        comm.send_bytes(b'cmp')
+        comm.send_bytes(dill.dumps(x_enc))
+        comm.send_bytes(dill.dumps(a_enc))
+        comm.send_bytes(dill.dumps(b_enc))
+        comm.send_bytes(dill.dumps(x))
+        comm.send_bytes(dill.dumps(a))
+        comm.send_bytes(dill.dumps(b))
+        return ts.ckks_vector_from(context, comm.receive_bytes())
+    def refresh(x):
+        refresh_count += 1
+        comm.send_bytes(b'refresh')
+        comm.send_bytes(dill.dumps(x.serialize()))
+        return ts.ckks_vector_from(context, comm.receive_bytes())
+
+    secFindScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, image_border_width, cmp=cmp, refresh=np.vectorize(refresh))
+    comm.end_interactive()
+    print(f"find scale space - cmps: {cmp_count} refs: {refresh_count}")
+    comm.send_bytes(dill.dumps(serialize_pyramid(dog_images)))
+
+
 
 def start_server():
     comm = Comm(mode='server')
@@ -118,6 +167,8 @@ def start_server():
     comm.register_api('compute_num_octaves', lambda: computeNumberOfOctaves(comm))
     comm.register_api('generate_gaussian_kernels', lambda: generateGaussianKernels(comm))
     comm.register_api('generate_gaussian_images', lambda: generateGaussianImages(comm))
+    comm.register_api('generate_dog_images', lambda: generateDoGImages(comm))
+    comm.register_api('find_scale_space_extrema', lambda:findScaleSpaceExtrema(comm))
     comm.start_server()
 
 if __name__ == "__main__":

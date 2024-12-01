@@ -114,22 +114,22 @@ def main():
     comm.start_client()
     context, secret_key = init_enc()
 
-    def cmp(x, a, b):
+    def cmp(x, a, b, x_enc, a_enc, b_enc):
         x = dill.loads(x)
         a = dill.loads(a)
         b = dill.loads(b)
-        if isinstance(x, ts.CKKSVector):
+        if x_enc:
             x = x.decrypt(secret_key)[0]
-        if isinstance(a, ts.CKKSVector):
+        if a_enc:
             a = a.decrypt(secret_key)[0]
-        if isinstance(b, ts.CKKSVector):
+        if b_enc:
             b = b.decrypt(secret_key)[0]
-        return dill.dumps(ts.ckks_vector(context=context, vector=[int(a < x < b)]))
+        return (ts.ckks_vector(context=context, vector=[int(a < x < b)]).serialize())
 
     def refresh(value):
-        value = dill.loads(value)
+        value = ts.ckks_vector_from(context, dill.loads(value))
         decrypted_value = value.decrypt(secret_key)[0]
-        return dill.dumps(ts.ckks_vector(context=context, vector=[decrypted_value]))
+        return (ts.ckks_vector(context=context, vector=[decrypted_value]).serialize())
 
 
     img = cv2.imread('../assets/fly-20x20.jpg')
@@ -194,6 +194,36 @@ def main():
     
     # print("Gaussian kernel sizes: ", (gaussian_kernel_sizes)) 
     show_pyramid(gaussian_pyramid_enc, secret_key)
+    
+    # Get difference of gaussian pyramid
+    comm.call_api(b'generate_dog_images')
+
+    comm.send_bytes(dill.dumps(serialize_pyramid(context, gaussian_pyramid_enc)))
+
+    comm.check_interactive(cmp=cmp, refresh=refresh)
+
+    dog_pyramid_enc = load_pyramid(context, dill.loads(comm.receive_bytes()))  
+    
+    # print("Gaussian kernel sizes: ", (gaussian_kernel_sizes)) 
+    show_pyramid(dog_pyramid_enc, secret_key)
+    
+    # Find scale space extrema
+    comm.call_api(b'generate_dog_images')
+
+    comm.send_bytes(dill.dumps(serialize_pyramid(context, gaussian_pyramid_enc)))
+    comm.send_bytes(dill.dumps(serialize_pyramid(context, dog_pyramid_enc)))
+    comm.send_bytes(dill.dumps(num_intervals))
+    comm.send_bytes(dill.dumps(sigma))
+    comm.send_bytes(dill.dumps(image_border_width))
+
+    comm.check_interactive(cmp=cmp, refresh=refresh)
+
+    # dog_pyramid_enc = load_pyramid(context, dill.loads(comm.receive_bytes()))  
+    
+    # print("Gaussian kernel sizes: ", (gaussian_kernel_sizes)) 
+    show_pyramid(dog_pyramid_enc, secret_key)
+
+
 
     comm.call_api(b'exit')
 

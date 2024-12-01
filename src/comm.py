@@ -1,4 +1,5 @@
 import socket
+import tqdm
 class Comm:
     def __init__(self, mode='client') -> None:
         self.mode = mode
@@ -71,6 +72,7 @@ class Comm:
         :return: Received bytes
         """
         # Receive data length (4-byte integer)
+        #print("Receiving bytes")
         length_buffer = self.client_socket.recv(4)
         length = int.from_bytes(length_buffer, byteorder="big")
         # print(length)
@@ -79,6 +81,8 @@ class Comm:
         while len(data) < length:
             chunk = self.client_socket.recv(min(chunk_size, length - len(data)))
             data += chunk
+            #print(len(data), end="\r")
+        #print()
         
         return data
 
@@ -108,12 +112,15 @@ class Comm:
             if api_name == 'end_interaction':
                 break
             elif api_name == 'cmp':
-                x = self.receive_bytes().decode()
-                a = self.receive_bytes().decode()
-                b = self.receive_bytes().decode()
-                self.send_bytes(cmp(x, a, b))
+                x_enc = self.receive_bytes()
+                a_enc = self.receive_bytes()
+                b_enc = self.receive_bytes()
+                x = self.receive_bytes()
+                a = self.receive_bytes()
+                b = self.receive_bytes()
+                self.send_bytes(cmp(x, a, b, x_enc, a_enc, b_enc))
             elif api_name == 'refresh':
-                x = self.receive_bytes().decode()
+                x = self.receive_bytes()
                 self.send_bytes(refresh(x))
         
 
